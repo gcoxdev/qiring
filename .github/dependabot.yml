@@ -8,6 +8,17 @@ updates:
     groups:
       rust-patches:
         update-types: [patch]
+    ignore:
+      # Keep these aligned with the versions used by Tauri's Linux stack to
+      # avoid compiling parallel GTK/GIO and HTML parser dependency trees.
+      - dependency-name: gio
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: dom_query
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   - package-ecosystem: npm
     directory: "/apps/desktop"
