@@ -2,7 +2,7 @@
 
 QiRing is a security-first, local-only desktop password manager for Linux, macOS, and Windows. It is built with Tauri 2, Rust, and a minimal Vite frontend.
 
-> **Project status:** QiRing `0.1.2` is pre-release software. Keep independent backups and do not use it as the only copy of important credentials.
+> **Project status:** QiRing `0.1.3` is pre-release software. Keep independent backups and do not use it as the only copy of important credentials.
 
 | Lock screen | Ring with example Qi entries |
 | --- | --- |

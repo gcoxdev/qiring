@@ -1,6 +1,6 @@
 # QiRing release process
 
-Pushing a version tag such as `v0.1.2` starts **Release desktop bundles** in GitHub Actions. After all three platform builds succeed, the workflow creates a **draft** GitHub release and attaches the assets. A maintainer reviews the draft and clicks **Publish release** manually. The workflow never publishes it automatically.
+Pushing a version tag such as `v0.1.3` starts **Release desktop bundles** in GitHub Actions. After all three platform builds succeed, the workflow creates a **draft** GitHub release and attaches the assets. A maintainer reviews the draft and clicks **Publish release** manually. The workflow never publishes it automatically.
 
 Signing is optional for both tagged releases and manual test builds. You can release unsigned builds without buying certificates or setting signing secrets. Each platform decides independently whether to sign, so a release can contain both signed and unsigned platform builds.
 
