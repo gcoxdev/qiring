@@ -29,7 +29,7 @@ zeroize.workspace = true
 qiring-core = { path = "../../../crates/qiring-core" }
 qiring-storage = { path = "../../../crates/qiring-storage" }
 dom_query = { version = "0.27.0", default-features = false }
-quick-xml = "0.41.0"
+quick-xml = "0.42.0"
 resvg = { version = "0.48.1", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
