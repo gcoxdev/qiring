@@ -9,7 +9,7 @@ name = "qiring_desktop_lib"
 crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.3", features = [] }
+tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
 anyhow.workspace = true
@@ -20,7 +20,7 @@ rustls = { version = "0.23.40", default-features = false, features = ["ring"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.12.1", features = [] }
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-opener = "2.5.4"
 url.workspace = true
@@ -28,7 +28,7 @@ uuid.workspace = true
 zeroize.workspace = true
 qiring-core = { path = "../../../crates/qiring-core" }
 qiring-storage = { path = "../../../crates/qiring-storage" }
-dom_query = { version = "0.27.0", default-features = false }
+dom_query = { version = "0.28.0", default-features = false }
 quick-xml = "0.42.0"
 resvg = { version = "0.48.1", default-features = false }
 

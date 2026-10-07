@@ -38,7 +38,7 @@ cargo test --workspace --locked
 
 The frontend build must precede Rust checks and tests: the desktop Rust crate embeds `apps/desktop/web-dist`. The version checker uses offline Cargo metadata to resolve workspace versions without compiling or downloading dependencies. It rejects mismatched Rust/frontend/Tauri versions and tags that are not exactly `v` plus the application version. A manual build from a branch checks version consistency without requiring a tag; a manual build from a tag also checks that tag.
 
-Wait for the normal **CI** workflow to pass on the exact changes being released. CI checks version consistency, release tooling, formatting, Rust linting/tests, JavaScript and Rust dependency audits, UI contracts, and browser/accessibility tests. The release workflow runs its own tooling and Rust tests, but does not repeat every CI check or automatically wait for CI.
+Wait for the normal **CI** workflow to pass on the exact changes being released. CI checks version consistency, release tooling, formatting, Rust linting/tests, a native Linux debug build, JavaScript and Rust dependency audits, UI contracts, and browser/accessibility tests. The native build also catches mismatched Tauri JavaScript/Rust versions: keep `@tauri-apps/api` and the Rust `tauri` crate on the same major/minor version when updating dependencies. This check does not package installers; use the manual release workflow below to test all three platforms. The release workflow runs its own tooling and Rust tests, but does not repeat every CI check or automatically wait for CI.
 
 ## Optional signing
 

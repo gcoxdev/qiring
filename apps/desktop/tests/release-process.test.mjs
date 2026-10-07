@@ -187,6 +187,33 @@ test("Windows portable archive is a ZIP containing the executable and marker", {
   assert.deepEqual(listing.stdout.trim().split(/\r?\n/).sort(), ["qiring-desktop.exe", "qiring-portable"]);
 });
 
+test("native builds omit empty Apple signing variables and preserve supplied credentials", { skip: process.platform === "win32" }, (t) => {
+  const { root, desktop } = fixture(t);
+  const block = workflow.split("      - name: Build native installer bundles\n")[1].split("\n      - name:")[0];
+  const shell = block.split("        run: |\n")[1].split("\n").map((line) => line.replace(/^          /, "")).join("\n")
+    .replaceAll("${{ matrix.platform }}", "macos");
+  const fields = ["APPLE_CERTIFICATE", "APPLE_CERTIFICATE_PASSWORD", "APPLE_SIGNING_IDENTITY", "APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_PATH", ...appleId];
+  const log = join(root, "build-environment.json");
+  const probe = join(root, "probe.cjs");
+  write(probe, `const fs = require('node:fs');
+fs.writeFileSync(process.env.BUILD_ENV_LOG, JSON.stringify({
+  args: process.argv.slice(2),
+  env: Object.fromEntries(${JSON.stringify(fields)}.filter(key => key in process.env).map(key => [key, process.env[key]]))
+}));
+`);
+  const mock = 'npm() { "$NODE_EXECUTABLE" "$BUILD_ENV_PROBE" "$@"; }\n';
+  for (const value of ["", "test-credential"]) {
+    const settings = Object.fromEntries(fields.map((key) => [key, value]));
+    succeeds(spawnSync("bash", ["-c", mock + shell], {
+      cwd: desktop, encoding: "utf8",
+      env: environment({ ...settings, NODE_EXECUTABLE: process.execPath, BUILD_ENV_PROBE: probe, BUILD_ENV_LOG: log })
+    }));
+    const result = JSON.parse(readFileSync(log, "utf8"));
+    assert.deepEqual(result.args, ["run", "build:macos"]);
+    assert.deepEqual(result.env, value ? settings : {});
+  }
+});
+
 test("macOS smoke checks inspect and detach the mounted DMG, even if signing verification fails", { skip: process.platform === "win32" }, (t) => {
   const { root, bundle } = fixture(t);
   write(join(bundle, "dmg/QiRing.dmg"), "test disk image");

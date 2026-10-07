@@ -2190,7 +2190,9 @@ mod tests {
 
         let root = portable_root_beside_launcher(&launcher).expect("portable root");
 
-        assert_eq!(root, directory.path().join(PORTABLE_DATA_DIRECTORY));
+        // Windows temp paths may use an 8.3 alias; the launcher path is canonicalized.
+        let expected = fs::canonicalize(directory.path()).expect("canonical temporary directory");
+        assert_eq!(root, expected.join(PORTABLE_DATA_DIRECTORY));
         assert!(root.is_dir());
         assert!(fs::read_dir(&root).expect("read sidecar").next().is_none());
     }

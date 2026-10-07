@@ -52,10 +52,14 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint Rust
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
       - name: Test Rust workspace
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
+
+      - name: Verify native desktop build
+        working-directory: apps/desktop
+        run: npm exec -- tauri build --debug --no-bundle --ci -- --locked
 
       - name: Audit JavaScript dependencies
         working-directory: apps/desktop
