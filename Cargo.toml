@@ -16,7 +16,7 @@ authors = ["QiRing Contributors"]
 
 [workspace.dependencies]
 anyhow = "1.0.104"
-argon2 = "0.5"
+argon2 = "0.6"
 atomic-write-file = "0.3"
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
