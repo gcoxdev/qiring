@@ -91,11 +91,11 @@ test("release workflow publishes installer and portable targets", async () => {
   const packager = await read("../scripts/package-portable.mjs");
   assert.match(workflow, /npm run build:\$\{\{ matrix\.platform \}\}/);
   assert.match(workflow, /package-portable\.mjs appimage/);
-  assert.match(workflow, /npm run build:windows-portable/);
+  assert.match(workflow, /enable-portable\.mjs windows/);
   assert.match(workflow, /npm run build:windows/);
   assert.match(workflow, /package-portable\.mjs windows/);
-  assert.match(collector, /linux: \["\.appimage", "\.deb", "\.tar\.gz"\]/);
-  assert.match(collector, /windows: \["\.msi", "\.zip"\]/);
+  assert.match(collector, /linux: \["\.appimage", "\.deb", "_portable\.tar\.gz"\]/);
+  assert.match(collector, /windows: \["\.msi", "_portable\.zip"\]/);
   assert.match(packager, /"qiring-portable"/);
 });
 

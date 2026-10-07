@@ -14,13 +14,15 @@
     "build:linux-appimage": "NO_STRIP=1 tauri build --bundles appimage && node scripts/name-build-output.mjs appimage",
     "build:linux-appimage-portable": "npm run build:linux-appimage && node scripts/enable-portable.mjs appimage",
     "build:linux-deb": "tauri build --bundles deb && node scripts/name-build-output.mjs deb",
-    "build:windows": "tauri build --bundles msi && node scripts/name-build-output.mjs msi",
+    "build:windows": "tauri build --bundles msi",
+    "postbuild:windows": "node scripts/name-build-output.mjs msi",
     "build:windows-portable": "npm run build:binary && node scripts/enable-portable.mjs windows",
     "build:macos": "tauri build --bundles dmg && node scripts/name-build-output.mjs dmg",
     "build:macos-universal": "tauri build --target universal-apple-darwin --bundles dmg && node scripts/name-build-output.mjs --target=universal-apple-darwin dmg",
     "preview": "vite preview --host 127.0.0.1 --port 1420 --strictPort",
     "test:e2e": "playwright test",
     "test:ui-contract": "node --test tests/ui-contract.test.mjs tests/build-output-name.test.mjs",
+    "test:release": "node --test tests/release-process.test.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

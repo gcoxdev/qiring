@@ -40,6 +40,14 @@ jobs:
         working-directory: apps/desktop
         run: npm run build
 
+      - name: Validate application versions
+        working-directory: apps/desktop
+        run: node scripts/check-release-version.mjs
+
+      - name: Test release tooling
+        working-directory: apps/desktop
+        run: npm run test:release
+
       - name: Verify formatting
         run: cargo fmt --all -- --check
 

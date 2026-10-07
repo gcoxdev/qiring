@@ -10,6 +10,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   bundle:
     strategy:
@@ -61,17 +65,32 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
 
+      - name: Validate application versions and version tag
+        working-directory: apps/desktop
+        run: node scripts/check-release-version.mjs
+
+      - name: Validate optional platform signing credentials
+        id: signing
+        working-directory: apps/desktop
+        run: node scripts/check-signing-env.mjs ${{ matrix.platform }}
+
       - name: Install frontend dependencies
         working-directory: apps/desktop
         run: npm ci
 
-      - name: Require signing credentials for tagged releases
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Test release tooling
         working-directory: apps/desktop
-        run: node scripts/check-signing-env.mjs ${{ matrix.platform }}
+        run: npm run test:release
+
+      - name: Build bundled frontend before Rust tests
+        working-directory: apps/desktop
+        run: npm run build
+
+      - name: Run release tests
+        run: cargo test --workspace --locked
 
       - name: Import Linux AppImage signing key
-        if: matrix.platform == 'linux' && env.LINUX_GPG_PRIVATE_KEY != ''
+        if: matrix.platform == 'linux' && steps.signing.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +101,7 @@ jobs:
           echo "APPIMAGETOOL_FORCE_SIGN=1" >> "$GITHUB_ENV"
 
       - name: Import Apple signing certificate
-        if: matrix.platform == 'macos' && env.APPLE_CERTIFICATE != ''
+        if: matrix.platform == 'macos' && steps.signing.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +121,7 @@ jobs:
           fi
 
       - name: Prepare Apple notarization API key
-        if: matrix.platform == 'macos' && env.APPLE_API_PRIVATE_KEY != ''
+        if: matrix.platform == 'macos' && steps.signing.outputs.enabled == 'true' && env.APPLE_API_PRIVATE_KEY != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -112,13 +131,13 @@ jobs:
           echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
       - name: Import Windows signing certificate
-        if: matrix.platform == 'windows' && env.WINDOWS_CERTIFICATE != ''
+        if: matrix.platform == 'windows' && steps.signing.outputs.enabled == 'true'
         shell: pwsh
         run: |
           $certificatePath = Join-Path $env:RUNNER_TEMP "qiring-certificate.pfx"
           [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
           $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
-          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password | Where-Object HasPrivateKey | Select-Object -First 1
           if (-not $certificate) { throw "Windows signing certificate import failed." }
           $configPath = Join-Path $env:RUNNER_TEMP "tauri.windows-signing.json"
           @{
@@ -132,13 +151,17 @@ jobs:
           } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $configPath
           "TAURI_WINDOWS_CONFIG=$configPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run release tests
-        run: cargo test --workspace
-
       - name: Build native installer bundles
         if: matrix.platform != 'windows'
         working-directory: apps/desktop
-        run: npm run build:${{ matrix.platform }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Empty secrets are still environment variables; Tauri expects absent signing settings.
+          for name in APPLE_SIGNING_IDENTITY APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PATH APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then unset "$name"; fi
+          done
+          npm run build:${{ matrix.platform }}
 
       - name: Package portable AppImage
         if: matrix.platform == 'linux'
@@ -147,18 +170,17 @@ jobs:
           node scripts/enable-portable.mjs appimage
           node scripts/package-portable.mjs appimage
 
-      - name: Build Windows portable executable and installer
+      - name: Build Windows installer
         if: matrix.platform == 'windows'
         working-directory: apps/desktop
         shell: pwsh
         run: |
-          npm run build:windows-portable
           if ($env:TAURI_WINDOWS_CONFIG) {
             npm run build:windows -- --config $env:TAURI_WINDOWS_CONFIG
           } else {
             npm run build:windows
           }
-          node scripts/package-portable.mjs windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Smoke test Linux installers
         if: matrix.platform == 'linux'
@@ -191,13 +213,19 @@ jobs:
           dmg="$(find target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
           test -n "$dmg"
           hdiutil verify "$dmg"
-          test -d target/release/bundle/macos/QiRing.app
+          # Tauri removes the temporary .app after a DMG-only build; inspect the shipped app.
+          mount_dir="$(mktemp -d)"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir"
+          trap 'hdiutil detach "$mount_dir" >/dev/null' EXIT
+          app="$mount_dir/QiRing.app"
+          test -d "$app"
+          test -f "$app/Contents/Info.plist"
           if [ -n "$APPLE_CERTIFICATE" ]; then
-            codesign --verify --deep --strict target/release/bundle/macos/QiRing.app
-            xcrun stapler validate target/release/bundle/macos/QiRing.app
+            codesign --verify --deep --strict "$app"
+            xcrun stapler validate "$app"
           fi
 
-      - name: Smoke test Windows installer
+      - name: Smoke test Windows installer and package portable executable
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
@@ -205,9 +233,16 @@ jobs:
           if (-not $msi) { throw "No MSI bundle was produced." }
           $destination = Join-Path $env:RUNNER_TEMP "qiring-msi-smoke"
           New-Item -ItemType Directory -Force -Path $destination | Out-Null
-          $process = Start-Process msiexec.exe -ArgumentList @('/a', $msi.FullName, '/qn', "TARGETDIR=$destination") -Wait -PassThru
+          $process = Start-Process msiexec.exe -ArgumentList @('/a', "`"$($msi.FullName)`"", '/qn', "TARGETDIR=`"$destination`"") -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "MSI administrative install failed with exit code $($process.ExitCode)." }
-          if (-not (Get-ChildItem $destination -Filter *.exe -Recurse)) { throw "Installed MSI contains no executable." }
+          $installedExecutables = @(Get-ChildItem $destination -Filter qiring-desktop.exe -Recurse -File)
+          if ($installedExecutables.Count -ne 1) { throw "Expected exactly one QiRing executable in the MSI." }
+          # Tauri restores the unsigned build output after bundling. Package the MSI's signed payload.
+          Copy-Item $installedExecutables[0].FullName target/release/qiring-desktop.exe -Force
+          node apps/desktop/scripts/enable-portable.mjs windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node apps/desktop/scripts/package-portable.mjs windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $portable = Get-ChildItem target\release\bundle\portable -Filter *_portable.zip | Select-Object -First 1
           if (-not $portable) { throw "No portable Windows archive was produced." }
           $portableDestination = Join-Path $env:RUNNER_TEMP "qiring-portable-smoke"
@@ -215,7 +250,7 @@ jobs:
           if (-not (Test-Path (Join-Path $portableDestination "qiring-desktop.exe"))) { throw "Portable archive contains no executable." }
           if (-not (Test-Path (Join-Path $portableDestination "qiring-portable"))) { throw "Portable archive contains no portable marker." }
           if ($env:WINDOWS_CERTIFICATE) {
-            $artifacts = @(Get-ChildItem target/release -Filter *.exe -File) + @(Get-ChildItem target/release/bundle/msi -Filter *.msi -File)
+            $artifacts = @($msi) + @(Get-Item (Join-Path $portableDestination "qiring-desktop.exe")) + $installedExecutables
             foreach ($artifact in $artifacts) {
               $signature = Get-AuthenticodeSignature $artifact.FullName
               if ($signature.Status -ne 'Valid') { throw "Invalid signature on $($artifact.FullName): $($signature.Status)" }
@@ -236,7 +271,7 @@ jobs:
 
       - name: Generate SHA-256 checksums
         working-directory: apps/desktop
-        run: node scripts/checksums.mjs
+        run: node scripts/checksums.mjs ${{ matrix.platform }}
 
       - name: Attest release provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -251,7 +286,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -263,10 +298,27 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Create GitHub release and upload assets
+      - name: Verify downloaded checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          for platform in linux macos windows; do
+            sha256sum --check "$platform-SHA256SUMS"
+          done
+
+      - name: Create or update draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --generate-notes --verify-tag
+          set -euo pipefail
+          if is_draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')"; then
+            if [ "$is_draft" != "true" ]; then
+              echo "Release $RELEASE_TAG is already published; refusing to replace its assets." >&2
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --draft --generate-notes --verify-tag
+          fi
           gh release upload "$RELEASE_TAG" release-assets/* --clobber

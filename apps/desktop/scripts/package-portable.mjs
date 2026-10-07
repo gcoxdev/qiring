@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 const mode = process.argv[2];
 const desktopRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(desktopRoot, "../..");
-const releaseRoot = resolve(workspaceRoot, "target/release");
+const releaseRoot = resolve(workspaceRoot, process.env.CARGO_TARGET_DIR || "target", "release");
 const bundleRoot = resolve(releaseRoot, "bundle");
 const outputRoot = resolve(bundleRoot, "portable");
 const config = JSON.parse(readFileSync(resolve(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"));
