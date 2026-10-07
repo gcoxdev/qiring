@@ -1,4 +1,4 @@
-use argon2::{password_hash::SaltString, Argon2, Params};
+use argon2::{Argon2, Params};
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305, XNonce,
@@ -183,10 +183,6 @@ pub fn random_dek() -> [u8; KEY_LEN] {
     dek
 }
 
-pub fn default_salt_string() -> SaltString {
-    SaltString::generate(&mut OsRng)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,6 +243,25 @@ mod tests {
         let one = derive_kek("master", &salt, &params).expect("kdf1");
         let two = derive_kek("master", &salt, &params).expect("kdf2");
         assert_eq!(one.as_slice(), two.as_slice());
+    }
+
+    #[test]
+    fn kdf_preserves_existing_vault_keys() {
+        // Captured with argon2 0.5.3 and QiRing's existing vault parameters.
+        let key = derive_kek(
+            "QiRing compatibility password",
+            b"qiring-test-salt",
+            &KdfParams::default(),
+        )
+        .expect("derive compatible key");
+        assert_eq!(
+            key.as_slice(),
+            &[
+                0xf8, 0xc6, 0x01, 0xba, 0xc1, 0xb3, 0x41, 0xf8, 0xa5, 0xda, 0x49, 0x48, 0x0f, 0x15, 0x0c,
+                0x34, 0xab, 0x37, 0x2c, 0x41, 0x75, 0xb6, 0xe8, 0xa5, 0x7c, 0x2a, 0xd9, 0xae, 0xb4, 0x47,
+                0x9c, 0x4d,
+            ]
+        );
     }
 
     #[test]
