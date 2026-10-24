@@ -13,7 +13,7 @@
     "screenshots": "node scripts/capture-app.mjs",
     "test": "playwright test"
   },
-  "dependencies": { "astro": "7.3.8" },
+  "dependencies": { "astro": "7.4.1" },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.64.0",
